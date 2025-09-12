@@ -1,0 +1,5 @@
+dataset/
+pretrain/
+results/
+wandb/
+__pycache__/
