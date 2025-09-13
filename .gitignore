@@ -2,4 +2,5 @@ dataset/
 pretrain/
 results/
 wandb/
+pretrain/
 __pycache__/

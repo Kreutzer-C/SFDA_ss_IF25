@@ -1,0 +1,68 @@
+program: train_adaptation_wandb_sweep.py
+method: random
+metric:
+  name: metrics/test_acc
+  goal: maximize
+parameters:
+  GPU_num:
+    value: "0"
+  seed:
+    value: 42
+
+  backbone:
+    value: "resnet50"
+  CLIP_backbone:
+    value: "ViT-B/16"
+
+  params:
+    value: ["q", "k", "v"]
+  position:
+    value: "all"
+  encoder:
+    value: "both"
+  r:
+    values: [2, 4, 8]
+  scaling:
+    values: [0.5, 1.0, 2.0, 4.0]
+  dropout_rate:
+    values: [0.0, 0.1, 0.25]
+  
+  dataset:
+    value: "Officehome"
+  source:
+    value: "Art"
+  target:
+    value: "Product"
+  acc_lower_bound:
+    value: 0.68
+  
+  data_path:
+    value: "./dataset"
+  batch_size:
+    value: 64
+  epochs:
+    value: 20
+  learning_rate_tar:
+    values: [1e-5, 5e-5, 7e-5, 1e-4, 2e-4, 5e-4, 1e-3]
+  learning_rate_lora:
+    values: [1e-5, 2e-5, 5e-5, 1e-4]
+  src_init:
+    values: [False, True]
+  warmup_ratio:
+    value: 0.1
+
+  lamb1:
+    values: [0.1, 0.5, 1.0, 2.0, 5.0]
+  zeta:
+    values: [1.0, 5.0, 10.0, 20.0]
+  lamb2:
+    values: [0.1, 0.5, 1.0, 2.0]
+  alpha_decay:
+    value: 0.5
+  K:
+    values: [3, 5, 7, 10]
+  temperature:
+    values: [0.01, 0.04, 0.07, 0.1, 0.15]
+  dynamic_ad:
+    value: true
+max_runs: 72
