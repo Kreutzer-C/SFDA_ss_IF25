@@ -402,6 +402,7 @@ class Trainer:
         logging.info("\n>>>=====================<<<")
         logging.info(f">>>Testing SFDA task: {self.args.source} --> {self.args.target}")
 
+        self.model.load_state_dict(torch.load(join(self.args.output_folder, f'best_targetmodel.pth')))
         self.model.eval()
         correct_predictions = 0
         total_samples = 0
