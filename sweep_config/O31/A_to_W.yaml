@@ -23,7 +23,7 @@ parameters:
   r:
     values: [2, 4, 8]
   scaling:
-    values: [0.5, 1.0, 2.0, 4.0]
+    values: [0.5, 1.0, 2.0, 4.0, 8.0]
   dropout_rate:
     values: [0.0, 0.1, 0.25]
   
@@ -43,20 +43,20 @@ parameters:
   epochs:
     value: 20
   learning_rate_tar:
-    values: [1e-5, 5e-5, 7e-5, 1e-4, 2e-4, 5e-4]
+    values: [5e-6, 7e-6, 1e-5, 2e-5, 5e-5, 7e-5, 1e-4]
   learning_rate_lora:
-    values: [1e-4, 5e-4, 7e-4, 1e-3, 2e-3, 5e-3]
+    values: [2e-4, 5e-4, 7e-4, 1e-3, 2e-3]
   src_init:
     values: [False, True]
   warmup_ratio:
     value: 0.1
 
   lamb1:
-    values: [0.1, 0.5, 1.0, 2.0, 5.0]
+    values: [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
   zeta:
-    values: [1.0, 5.0, 10.0, 20.0]
+    values: [0.1, 0.5, 1.0, 5.0, 10.0]
   lamb2:
-    values: [0.1, 0.5, 1.0, 2.0]
+    values: [0.01, 0.1, 0.2, 0.5, 1.0, 2.0]
   alpha_decay:
     value: 0.5
   K:
