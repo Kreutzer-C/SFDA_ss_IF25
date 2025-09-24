@@ -30,11 +30,11 @@ parameters:
   dataset:
     value: "Office-31"
   source:
-    value: "amazon"
+    value: "dslr"
   target:
-    value: "webcam"
+    value: "amazon"
   acc_lower_bound:
-    value: 0.7
+    value: 0.55
   
   data_path:
     value: "./dataset"

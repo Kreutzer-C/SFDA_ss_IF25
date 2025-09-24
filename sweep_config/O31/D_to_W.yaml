@@ -30,7 +30,7 @@ parameters:
   dataset:
     value: "Office-31"
   source:
-    value: "amazon"
+    value: "dslr"
   target:
     value: "webcam"
   acc_lower_bound:
