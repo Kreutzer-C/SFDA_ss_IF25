@@ -43,7 +43,7 @@ parameters:
   epochs:
     value: 20
   learning_rate_tar:
-    values: [5e-6, 7e-6, 1e-5, 2e-5, 5e-5, 7e-5]
+    values: [5e-7, 1e-6, 2e-6, 5e-6, 7e-6]
   learning_rate_lora:
     values: [1e-5, 5e-5, 7e-5, 1e-4, 2e-4, 5e-4]
   src_init:
