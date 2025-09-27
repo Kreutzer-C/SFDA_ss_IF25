@@ -422,7 +422,7 @@ def train_adaptation():
         if args.target not in args.Domain_ID:
             raise ValueError(f"Target domain {args.target} not included in domains of {args.dataset}: {args.Domain_ID}")
 
-        args.output_folder = join(os.getcwd(), 'results', args.exp, args.dataset, f"{args.source}_to_{args.target}")
+        args.output_folder = join(os.getcwd(), 'results', args.dataset, f"{args.source}_to_{args.target}", args.exp)
         if os.path.exists(args.output_folder):
             raise ValueError(f"Output path {args.output_folder} existed, please specify new one by setting <--exp>")
         else:
@@ -461,7 +461,7 @@ def train_adaptation():
                 args.source = src_domain
                 args.target = tgt_domain
 
-                args.output_folder = join(os.getcwd(), 'results', args.exp, args.dataset, f"{args.source}_to_{args.target}")
+                args.output_folder = join(os.getcwd(), 'results', args.dataset, f"{args.source}_to_{args.target}", args.exp)
                 if os.path.exists(args.output_folder):
                     raise ValueError(f"Output path {args.output_folder} existed, please specify new one by setting <--exp>")
                 else:

@@ -387,7 +387,7 @@ def train_sweep():
         config.exp = f"SFDA_ss_IF25_{run.id}"
 
         # 运行训练
-        config.output_folder = join(os.getcwd(), 'results', config.exp, config.dataset, f"{config.source}_to_{config.target}")
+        config.output_folder = join(os.getcwd(), 'results', config.dataset, f"{config.source}_to_{config.target}", config.exp)
         if os.path.exists(config.output_folder):
             raise ValueError(f"Output path {config.output_folder} existed, please specify new one by setting <--exp>")
         else:
