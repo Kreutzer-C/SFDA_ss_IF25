@@ -41,7 +41,7 @@ parameters:
   batch_size:
     value: 64
   epochs:
-    value: 20
+    value: 10
   learning_rate_tar:
     values: [5e-6, 1e-5, 5e-5, 7e-5, 1e-4]
   learning_rate_lora:
