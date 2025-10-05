@@ -35,6 +35,7 @@ def get_args():
     parser.add_argument("--Domain_ID", default=[])
     parser.add_argument("--classes", default=[])
     parser.add_argument("--n_classes", type=int, default=7, help="Number of classes")
+    parser.add_argument("--tgt_classes", type=int, default=None, help="Number of target classes (PDA)")
 
     # Training Setting
     parser.add_argument("--data_path", default='./dataset', help="your data_path")
@@ -65,7 +66,11 @@ class Trainer:
         self.model.load_state_dict(torch.load(self.checkpoint_path))
         logging.info(f">>> Loading source model from: {self.checkpoint_path}")
 
-        self.test_loader = data_helper.get_test_dataloader(args)
+        if args.tgt_classes is not None and args.tgt_classes < args.n_classes:
+            self.test_loader = data_helper.get_PDA_test_dataloader(args)
+            logging.info("Using PDA-Setting test dataloader")
+        else:
+            self.test_loader = data_helper.get_test_dataloader(args)
         logging.info("Dataset size: OOD test %d" % (len(self.test_loader.dataset)))
 
     def do_test(self):
