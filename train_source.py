@@ -33,6 +33,7 @@ def get_args():
     parser.add_argument("--classes", default=[])
     parser.add_argument("--n_classes", type=int, default=7, help="Number of classes")
     parser.add_argument("--val_size", type=float, default=0.1)
+    parser.add_argument("--src_classes", type=int, default=None, help="Number of source classes (ODA)")
 
     # Training Setting
     parser.add_argument("--data_path", default='./dataset', help="your data_path")
@@ -66,7 +67,11 @@ class Trainer:
             self.classifier
         )
 
-        self.source_loader, self.val_loader = data_helper.get_train_dataloader(args)
+        if args.src_classes is not None and args.src_classes < args.n_classes:
+            self.source_loader, self.val_loader = data_helper.get_ODA_train_dataloader(args)
+            logging.info("Using ODA-Setting train dataloader")
+        else:
+            self.source_loader, self.val_loader = data_helper.get_train_dataloader(args)
         logging.info("Dataset size: train %d, val %d" % (
             len(self.source_loader.dataset), len(self.val_loader.dataset)))
 

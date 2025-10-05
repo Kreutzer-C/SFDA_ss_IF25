@@ -52,8 +52,26 @@ def _dataset_info_pda(txt_labels, tgt_classes=25):
     return file_names, labels
 
 
-def get_split_dataset_info(txt_list, val_percentage):
-    names, labels = _dataset_info(txt_list)
+def _dataset_info_oda(txt_labels, src_classes=25):
+    with open(txt_labels, 'r') as f:
+        images_list = f.readlines()
+
+    file_names = []
+    labels = []
+    for row in images_list:
+        row = row.split(' ')
+        if int(row[1]) <= src_classes:
+            file_names.append(row[0])
+            labels.append(int(row[1]))
+
+    return file_names, labels
+
+
+def get_split_dataset_info(txt_list, val_percentage, oda=False, src_classes=25):
+    if oda:
+        names, labels = _dataset_info_oda(txt_list, src_classes)
+    else:   
+        names, labels = _dataset_info(txt_list)
     return get_random_subset(names, labels, val_percentage)
 
 
