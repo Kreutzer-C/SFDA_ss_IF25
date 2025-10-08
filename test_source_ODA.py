@@ -10,10 +10,41 @@ import logging
 import torch
 from torch import nn
 from tqdm import tqdm
+import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from data import data_helper
 from model.model_factory import get_backbone, Classifier
 from data.data_info import get_data_info
+
+
+def analyze_class_distribution(dataloader, dataset_name, split_name):
+    """
+    分析并打印数据集中class的分布信息
+    """
+    all_labels = []
+    for batch_data in dataloader:
+        if len(batch_data) == 3:  # (data, labels), domain_idx
+            (_, labels), _ = batch_data
+        else:  # (data, labels)
+            _, labels = batch_data
+        all_labels.extend(labels.numpy())
+    
+    all_labels = np.array(all_labels)
+    unique_classes = np.unique(all_labels)
+    class_counts = {}
+    for cls in unique_classes:
+        class_counts[cls] = np.sum(all_labels == cls)
+    
+    logging.info(f"=== {dataset_name} {split_name} Class Analysis ===")
+    logging.info(f"Total samples: {len(all_labels)}")
+    logging.info(f"Number of unique classes: {len(unique_classes)}")
+    logging.info(f"Class range: {min(unique_classes)} to {max(unique_classes)}")
+    logging.info("Class distribution:")
+    for cls in sorted(unique_classes):
+        logging.info(f"  Class {cls}: {class_counts[cls]} samples ({class_counts[cls]/len(all_labels)*100:.2f}%)")
+    logging.info("=" * 50)
+    
+    return unique_classes, class_counts
 
 
 def get_args():
@@ -68,8 +99,12 @@ class Trainer:
         if args.src_classes is not None and args.src_classes < args.n_classes:
             self.test_loader = data_helper.get_ODA_test_dataloader(args)
             logging.info("Using ODA-Setting test dataloader")
+            # 分析ODA测试数据的class分布
+            analyze_class_distribution(self.test_loader, f"{args.dataset}_ODA", f"{args.source}_to_{args.target}")
         else:
             self.test_loader = data_helper.get_test_dataloader(args)
+            # 分析普通测试数据的class分布
+            analyze_class_distribution(self.test_loader, f"{args.dataset}_Standard", f"{args.source}_to_{args.target}")
         logging.info("Dataset size: OOD test %d" % (len(self.test_loader.dataset)))
 
     def do_test(self):
