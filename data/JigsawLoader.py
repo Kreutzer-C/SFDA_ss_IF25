@@ -79,7 +79,7 @@ def _dataset_info_oda_target(txt_labels, src_classes=25, special_class=65):
         if int(row[1]) <= src_classes:
             labels.append(int(row[1]))
         else:
-            labels.append(special_class)
+            labels.append(special_class + 1)
 
     return file_names, labels
 
