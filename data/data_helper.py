@@ -2,7 +2,7 @@ from os.path import join, dirname
 import torch
 from torch.utils.data import Sampler, DataLoader
 from torchvision import transforms
-from data.JigsawLoader import get_split_dataset_info, _dataset_info, _dataset_info_pda, _dataset_info_oda
+from data.JigsawLoader import get_split_dataset_info, _dataset_info, _dataset_info_pda, _dataset_info_oda, _dataset_info_oda_target
 from data.concat_dataset import ConcatDataset
 from data.JigsawLoader import JigsawIADataset, JigsawTestIADataset_idx, JigsawTestIADataset
 
