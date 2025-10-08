@@ -33,7 +33,6 @@ def get_train_dataloader(args):
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     return train_loader, val_loader
 
-
 def get_ODA_train_dataloader(args):
     dataset_list = [args.source]
     assert isinstance(dataset_list, list)
@@ -85,6 +84,18 @@ def get_PDA_adapt_dataloader(args):
     loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
     return loader
 
+def get_ODA_adapt_dataloader(args):
+    if args.dataset == 'PACS':
+        names, labels = _dataset_info_oda_target(join(dirname(__file__), 'data_path_txt_lists', args.dataset, '%s_test_kfold.txt' % args.target), args.src_classes, args.n_classes)
+    else:
+        names, labels = _dataset_info_oda_target(join(dirname(__file__), 'data_path_txt_lists', args.dataset, '%s_test.txt' % args.target), args.src_classes, args.n_classes)
+
+    img_tr = get_val_transformer(args)
+    val_dataset = JigsawTestIADataset(names, labels, args.data_path, img_transformer=img_tr)
+
+    dataset = ConcatDataset([val_dataset])
+    loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    return loader
 
 def get_adapt_dataloader_idx(args):
     if args.dataset == 'PACS':

@@ -29,6 +29,7 @@ def get_args():
     parser.add_argument("--classes", default=[])
     parser.add_argument("--n_classes", type=int, default=7, help="Number of classes")
     parser.add_argument("--tgt_classes", type=int, default=None, help="Number of target classes (PDA)")
+    parser.add_argument("--src_classes", type=int, default=None, help="Number of source classes (ODA)")
 
     # Training Setting
     parser.add_argument("--data_path", default='./dataset', help="your data_path")
@@ -44,6 +45,7 @@ class Trainer:
     def __init__(self, args, device):
         self.args = args
         self.device = device
+        self.oda = False
 
         self.clip_model, _ = clip.load(self.args.CLIP_backbone, device=self.device, download_root='./pretrain/CLIP')
         self.text_feature_dim = 512
@@ -52,6 +54,10 @@ class Trainer:
         if args.tgt_classes is not None and args.tgt_classes < args.n_classes:
             self.test_loader = data_helper.get_PDA_test_dataloader(args)
             logging.info("Using PDA-Setting test dataloader")
+        elif args.src_classes is not None and args.src_classes < args.n_classes:
+            self.oda = True
+            self.test_loader = data_helper.get_ODA_test_dataloader(args)
+            logging.info("Using ODA-Setting test dataloader")
         else:
             self.test_loader = data_helper.get_test_dataloader(args)
         logging.info("Dataset size: OOD test %d" % (len(self.test_loader.dataset)))
@@ -65,7 +71,19 @@ class Trainer:
 
             with torch.no_grad():
                 logits_per_image, _ = self.clip_model(data, self.text_inputs)
-                preds = torch.argmax(logits_per_image.softmax(dim=-1), dim=1)
+                prob = torch.softmax(logits_per_image, dim=1)
+                preds = torch.argmax(prob, dim=1)
+                if self.oda:
+                    ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.src_classes)
+                    ent = ent.detach().cpu().numpy()
+                    from sklearn.cluster import KMeans
+                    kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+                    labels = kmeans.predict(ent.reshape(-1,1))
+                    idx = np.where(labels==1)[0]
+                    iidx = 0
+                    if ent[idx].mean() > ent.mean():
+                        iidx = 1
+                    preds[np.where(labels==iidx)[0]] = self.args.n_classes
 
             correct_predictions += (preds == class_l).sum().item()
             total_samples += class_l.size(0)

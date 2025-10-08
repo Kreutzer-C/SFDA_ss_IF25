@@ -83,7 +83,7 @@ class Trainer:
                 outputs = self.model(data)
             prob = torch.softmax(outputs, dim=1)
             pred = torch.argmax(prob, dim=1)
-            ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.n_classes)
+            ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.src_classes)
             ent = ent.detach().cpu().numpy()
 
             from sklearn.cluster import KMeans
