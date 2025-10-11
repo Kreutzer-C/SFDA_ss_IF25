@@ -10,6 +10,7 @@ import logging
 import torch
 from torch import nn
 from tqdm import tqdm
+import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from data import data_helper
 from model.model_factory import get_backbone, Classifier
@@ -36,6 +37,7 @@ def get_args():
     parser.add_argument("--classes", default=[])
     parser.add_argument("--n_classes", type=int, default=7, help="Number of classes")
     parser.add_argument("--tgt_classes", type=int, default=None, help="Number of target classes (PDA)")
+    parser.add_argument("--src_classes", type=int, default=None, help="Number of source classes (ODA)")
 
     # Training Setting
     parser.add_argument("--data_path", default='./dataset', help="your data_path")
@@ -57,7 +59,10 @@ class Trainer:
         self.clip_feature_dim = 512
 
         self.featurizer = get_backbone(args.backbone, self.clip_feature_dim).to(device)
-        self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
+        if args.src_classes is not None and args.src_classes < args.n_classes:
+            self.classifier = Classifier(self.clip_feature_dim, args.src_classes).to(device)
+        else:
+            self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
         self.model = nn.Sequential(
             self.featurizer,
             self.classifier
@@ -66,7 +71,10 @@ class Trainer:
         self.model.load_state_dict(torch.load(self.checkpoint_path))
         logging.info(f">>> Loading source model from: {self.checkpoint_path}")
 
-        if args.tgt_classes is not None and args.tgt_classes < args.n_classes:
+        if args.src_classes is not None and args.src_classes < args.n_classes:
+            self.test_loader = data_helper.get_ODA_test_dataloader(args)
+            logging.info("Using ODA-Setting test dataloader")
+        elif args.tgt_classes is not None and args.tgt_classes < args.n_classes:
             self.test_loader = data_helper.get_PDA_test_dataloader(args)
             logging.info("Using PDA-Setting test dataloader")
         else:
@@ -81,7 +89,25 @@ class Trainer:
             data, class_l = data.to(self.device), class_l.to(self.device)
             with torch.no_grad():
                 outputs = self.model(data)
-            pred = torch.argmax(torch.softmax(outputs, dim=1), dim=1)
+            
+            # ODA设置下的预测逻辑
+            if self.args.src_classes is not None and self.args.src_classes < self.args.n_classes:
+                prob = torch.softmax(outputs, dim=1)
+                pred = torch.argmax(prob, dim=1)
+                ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.src_classes)
+                ent = ent.detach().cpu().numpy()
+
+                from sklearn.cluster import KMeans
+                kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+                labels = kmeans.predict(ent.reshape(-1,1))
+                idx = np.where(labels==1)[0]
+                iidx = 0
+                if ent[idx].mean() > ent.mean():
+                    iidx = 1
+                pred[np.where(labels==iidx)[0]] = self.args.n_classes
+            else:
+                pred = torch.argmax(torch.softmax(outputs, dim=1), dim=1)
+            
             correct_predictions += (pred == class_l).sum().item()
             total_samples += class_l.size(0)
 
@@ -90,7 +116,10 @@ class Trainer:
         logging.info(">>>=====================<<<\n")
 
     def do_regis(self):
-        copy_target_path = join(os.getcwd(), 'pretrain', 'ERM', self.args.backbone, self.args.dataset)
+        if self.args.src_classes is not None and self.args.src_classes < self.args.n_classes:
+            copy_target_path = join(os.getcwd(), 'pretrain', f'ERM_ODA{self.args.src_classes}', self.args.backbone, self.args.dataset)
+        else:
+            copy_target_path = join(os.getcwd(), 'pretrain', 'ERM', self.args.backbone, self.args.dataset)
         maybe_mkdir_p(copy_target_path)
         shutil.copy(self.checkpoint_path,
                     join(copy_target_path, f'{self.args.source}_best.pth'))

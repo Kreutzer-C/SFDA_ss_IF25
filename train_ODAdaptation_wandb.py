@@ -138,7 +138,10 @@ class Trainer:
 
         # Define target model and initialize source domain pre-train parameters
         self.featurizer = get_backbone(args.backbone, self.clip_feature_dim).to(device)
-        self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
+        if args.src_classes is not None and args.src_classes < args.n_classes:
+            self.classifier = Classifier(self.clip_feature_dim, args.src_classes).to(device)
+        else:   
+            self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
         for param in self.classifier.parameters():
             param.requires_grad = False
         self.model = nn.Sequential(
@@ -149,7 +152,7 @@ class Trainer:
         logging.info(f">>> Loading source model from: {args.checkpoint_path}")
 
         # Define CO-Module
-        self.collaboration_module = Collaboration_Module(self.args.n_classes, device).to(device)
+        self.collaboration_module = Collaboration_Module(self.args.src_classes, device).to(device)
 
         # Define optimizers and schedulers
         self.optimizer_tar = optim.AdamW(self.model.parameters(), lr=args.learning_rate_tar,
@@ -169,8 +172,10 @@ class Trainer:
             T_mult=1,  # 周期倍数
             eta_min=0.0  # 最小学习率
         )
-
-        self.classify_prompt = [f"a photo of a {c.replace('_', ' ')}" for c in self.args.classes]
+        if self.args.src_classes is not None and self.args.src_classes < self.args.n_classes:
+            self.classify_prompt = [f"a photo of a {c.replace('_', ' ')}" for c in self.args.classes[:self.args.src_classes]]
+        else:
+            self.classify_prompt = [f"a photo of a {c.replace('_', ' ')}" for c in self.args.classes]
         self.cosine_sim_criterion = nn.CosineEmbeddingLoss()
 
         self.best_epoch_acc = 0.0
@@ -187,8 +192,8 @@ class Trainer:
     def initialize_prototype(self):
         self.featurizer.eval()
         self.classifier.eval()
-        prototype_sum = torch.zeros(self.n_classes, self.n_classes).to(self.device)
-        prototype_count = torch.zeros(self.n_classes).to(self.device)
+        prototype_sum = torch.zeros(self.args.src_classes, self.args.src_classes).to(self.device)
+        prototype_count = torch.zeros(self.args.src_classes).to(self.device)
         with torch.no_grad():
             logging.info("\nInitialize prototype memory...")
             for iteration, ((img, class_l), d_idx) in enumerate(tqdm(self.target_loader)):
@@ -197,16 +202,28 @@ class Trainer:
                 z = self.featurizer(img)
                 p_src = torch.softmax(self.classifier(z), dim=1)
                 y_src = torch.argmax(p_src, dim=1)
-                for i in range(self.n_classes):
+                ent = torch.sum(-p_src * torch.log(p_src + 1e-5), dim=1) / np.log(self.args.src_classes)
+                ent = ent.detach().cpu().numpy()
+
+                from sklearn.cluster import KMeans
+                kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+                labels = kmeans.predict(ent.reshape(-1,1))
+                idx = np.where(labels==1)[0]
+                iidx = 0
+                if ent[idx].mean() > ent.mean():
+                    iidx = 1
+                y_src[np.where(labels==iidx)[0]] = self.args.n_classes
+
+                for i in range(self.args.src_classes):
                     mask = (y_src == i)
                     if mask.any():
                         p_src_i = p_src[mask]
                         prototype_sum[:, i] += p_src_i.sum(dim=0)
                         prototype_count[i] += mask.sum()
 
-            init_memory = torch.zeros_like(prototype_sum)  # [n_classes, n_classes]
-            uniform = torch.full((self.n_classes,), 1.0 / self.n_classes).to(self.device)
-            for i in range(self.n_classes):
+            init_memory = torch.zeros_like(prototype_sum)  # [src_classes, src_classes]
+            uniform = torch.full((self.args.src_classes,), 1.0 / self.args.src_classes).to(self.device)
+            for i in range(self.args.src_classes):
                 if prototype_count[i] > 0:
                     init_memory[:, i] = prototype_sum[:, i] / prototype_count[i]
                 else:
@@ -249,50 +266,74 @@ class Trainer:
                 p_mix = self.collaboration_module(p_tar, p_vlm, self.ad)
 
             y_pred_mix = torch.argmax(p_mix, dim=1)
+            ent = torch.sum(-p_mix * torch.log(p_mix + 1e-5), dim=1) / np.log(self.args.src_classes)
+            ent = ent.detach().cpu().numpy()
+
+            from sklearn.cluster import KMeans
+            kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+            labels = kmeans.predict(ent.reshape(-1,1))
+            idx = np.where(labels==1)[0]
+            iidx = 0
+            if ent[idx].mean() > ent.mean():
+                iidx = 1
+            y_pred_mix[np.where(labels==iidx)[0]] = self.args.n_classes
+            low_entropy_mask = labels != iidx  # 低熵样本的掩码
+
             anchor_prompt = []
             entangled_prompts = []
-            for i in y_pred_mix:
+            for i in y_pred_mix[low_entropy_mask]:
                 cls_name = self.args.classes[i].replace('_', ' ')
                 anchor_prompt.append(f"a {cls_name}.")
                 single_sample_entangled_prompt = get_text_prompts(cls_name, self.K)  # len = K
-                entangled_prompts.extend(single_sample_entangled_prompt)  # len = bs*K
+                entangled_prompts.extend(single_sample_entangled_prompt)  # len = bs(in src)*K
             # print(f"{anchor_prompt} || {entangled_prompts}")
 
             self.clip_model.train()
             self.optimizer_lora.zero_grad()
             with ((torch.amp.autocast(device_type="cuda", dtype=torch.float16))):
                 image_feature = self.clip_model.encode_image(img)
+                if low_entropy_mask.any():
+                    # 只保留低熵样本的image_feature
+                    image_feature = image_feature[low_entropy_mask]
 
                 anchor_token = clip.tokenize(anchor_prompt).to(self.device)
                 anchor_feature = self.clip_model.encode_text(anchor_token)  # (bs, 512)
 
                 entangled_tokens = clip.tokenize(entangled_prompts).to(self.device)
                 entangled_features = self.clip_model.encode_text(entangled_tokens)
-                entangled_features = entangled_features.view(-1, self.K, self.clip_feature_dim)  # (bs,K,512)
+                entangled_features = entangled_features.view(-1, self.K, self.clip_feature_dim)  # (bs(in src),K,512)
 
-            ab_sim_loss = absolute_sim_loss(anchor_feature, entangled_features)
-            re_sim_loss = relative_sim_loss(entangled_features)
-            loss_tc = ab_sim_loss + re_sim_loss
+            # 只有当存在低熵样本时才计算损失
+            if low_entropy_mask.any() and len(anchor_prompt) > 0:
+                ab_sim_loss = absolute_sim_loss(anchor_feature, entangled_features)
+                re_sim_loss = relative_sim_loss(entangled_features)
+                loss_tc = ab_sim_loss + re_sim_loss
 
-            loss_nce = clip_contrastive_loss(image_feature, anchor_feature, temperature=self.temperature)
+                loss_nce = clip_contrastive_loss(image_feature, anchor_feature, temperature=self.temperature)
 
-            loss_clip = self.lamb1 * loss_tc + loss_nce
+                loss_clip = self.lamb1 * loss_tc + loss_nce
 
-            scaler.scale(loss_clip).backward()
-            scaler.step(self.optimizer_lora)
-            scaler.update()
-
-            iter_num = iteration + self.current_epoch * len(self.target_loader)
-            self._update_learning_rate(self.optimizer_lora, self.scheduler_lora, self.args.learning_rate_lora, iter_num)
-            wandb.log({
-                'stage1_LoRA/loss_clip': loss_clip,
-                'stage1_LoRA/loss_tc': loss_tc,
-                'stage1_LoRA/loss_nce': loss_nce,
-                'stage1_LoRA/lr_lora': self.optimizer_lora.param_groups[0]['lr'],
-                'stage1_LoRA/step': iter_num
-            })
+                scaler.scale(loss_clip).backward()
+                scaler.step(self.optimizer_lora)
+                scaler.update()
+                
+                iter_num = iteration + self.current_epoch * len(self.target_loader)
+                self._update_learning_rate(self.optimizer_lora, self.scheduler_lora, self.args.learning_rate_lora, iter_num)
+                wandb.log({
+                    'stage1_LoRA/loss_clip': loss_clip,
+                    'stage1_LoRA/loss_tc': loss_tc,
+                    'stage1_LoRA/loss_nce': loss_nce,
+                    'stage1_LoRA/lr_lora': self.optimizer_lora.param_groups[0]['lr'],
+                    'stage1_LoRA/step': iter_num
+                })
+            else:
+                # 如果没有低熵样本，跳过这次更新
+                logging.debug("Stage1跳过此次更新：没有低熵样本")
+                iter_num = iteration + self.current_epoch * len(self.target_loader)
+                self._update_learning_rate(self.optimizer_lora, self.scheduler_lora, self.args.learning_rate_lora, iter_num)
 
             y_pred_vlm = torch.argmax(p_vlm, dim=1)
+            y_pred_vlm[np.where(labels==iidx)[0]] = self.args.n_classes
             correct_predictions += (y_pred_vlm == class_l).sum().item()
             correct_predictions_mix += (y_pred_mix == class_l).sum().item()
             total_samples += class_l.size(0)
@@ -327,38 +368,65 @@ class Trainer:
 
                 p_mix = self.collaboration_module(p_tar, p_vlm, self.ad)
                 y_pred_mix = torch.argmax(p_mix, dim=1)
+                
+                # 计算熵值用于样本筛选
+                ent = torch.sum(-p_mix * torch.log(p_mix + 1e-5), dim=1) / np.log(self.args.src_classes)
+                ent = ent.detach().cpu().numpy()
+                
+                from sklearn.cluster import KMeans
+                kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+                labels = kmeans.predict(ent.reshape(-1,1))
+                idx = np.where(labels==1)[0]
+                iidx = 0
+                if ent[idx].mean() > ent.mean():
+                    iidx = 1
+                low_entropy_mask = labels != iidx  # 低熵样本的掩码
 
                 anchor_prompt = [f"a {self.args.classes[i].replace('_', ' ')}." for i in y_pred_mix]
                 with ((torch.amp.autocast(device_type="cuda", dtype=torch.float16))):
                     anchor_token = clip.tokenize(anchor_prompt).to(self.device)
                     anchor_feature = self.clip_model.encode_text(anchor_token)
 
-            loss_mi = IID_loss(p_tar, p_mix)
-            loss_cls = (- p_mix * p_tar).sum(dim=1).mean()
-            loss_tg = feature_dist_loss(anchor_feature.to(torch.float32), z)
+            # 只有当存在低熵样本时才计算损失
+            if low_entropy_mask.any():
+                # 筛选低熵样本
+                p_tar_filtered = p_tar[low_entropy_mask]
+                p_mix_filtered = p_mix[low_entropy_mask]
+                z_filtered = z[low_entropy_mask]
+                anchor_feature_filtered = anchor_feature[low_entropy_mask]
+                
+                loss_mi = IID_loss(p_tar_filtered, p_mix_filtered)
+                loss_cls = (- p_mix_filtered * p_tar_filtered).sum(dim=1).mean()
+                loss_tg = feature_dist_loss(anchor_feature_filtered.to(torch.float32), z_filtered)
 
-            loss_tma = loss_mi + self.zeta * loss_cls + self.lamb2 * loss_tg
+                loss_tma = loss_mi + self.zeta * loss_cls + self.lamb2 * loss_tg
 
-            loss_tma.backward()
-            self.optimizer_tar.step()
+                loss_tma.backward()
+                self.optimizer_tar.step()
 
-            if iteration % (len(self.target_loader) // 3) == 0:
-                logging.info("iter {}/{} loss_TMA: {:.6f} loss_mi: {:.6f} loss_cls: {:.6f} loss_tg: {:.6f}"
-                             .format(iteration, len(self.target_loader),
-                                     loss_tma.item(), loss_mi.item(), loss_cls.item(), loss_tg.item()))
+                if iteration % (len(self.target_loader) // 3) == 0:
+                    logging.info("iter {}/{} loss_TMA: {:.6f} loss_mi: {:.6f} loss_cls: {:.6f} loss_tg: {:.6f}"
+                                 .format(iteration, len(self.target_loader),
+                                         loss_tma.item(), loss_mi.item(), loss_cls.item(), loss_tg.item()))
 
-            iter_num = iteration + self.current_epoch * len(self.target_loader)
-            self._update_learning_rate(self.optimizer_tar, self.scheduler_tar, self.args.learning_rate_tar, iter_num)
-            wandb.log({
-                'stage2_TMA/loss_tma': loss_tma,
-                'stage2_TMA/loss_mi': loss_mi,
-                'stage2_TMA/loss_cls': loss_cls,
-                'stage2_TMA/loss_tg': loss_tg,
-                'stage2_TMA/lr_tar': self.optimizer_tar.param_groups[0]['lr'],
-                'stage2_TMA/step': iter_num
-            })
+                iter_num = iteration + self.current_epoch * len(self.target_loader)
+                self._update_learning_rate(self.optimizer_tar, self.scheduler_tar, self.args.learning_rate_tar, iter_num)
+                wandb.log({
+                    'stage2_TMA/loss_tma': loss_tma,
+                    'stage2_TMA/loss_mi': loss_mi,
+                    'stage2_TMA/loss_cls': loss_cls,
+                    'stage2_TMA/loss_tg': loss_tg,
+                    'stage2_TMA/lr_tar': self.optimizer_tar.param_groups[0]['lr'],
+                    'stage2_TMA/step': iter_num
+                })
+            else:
+                # 如果没有低熵样本，跳过这次更新
+                logging.debug("Stage2跳过此次更新：没有低熵样本")
+                iter_num = iteration + self.current_epoch * len(self.target_loader)
+                self._update_learning_rate(self.optimizer_tar, self.scheduler_tar, self.args.learning_rate_tar, iter_num)
 
             y_pred_tar = torch.argmax(p_tar, dim=1)
+            y_pred_tar[np.where(labels==iidx)[0]] = self.args.n_classes
             correct_predictions += (y_pred_tar == class_l).sum().item()
             total_samples += class_l.size(0)
 
@@ -407,13 +475,26 @@ class Trainer:
         self.model.eval()
         correct_predictions = 0
         total_samples = 0
+        self.args.tgt_classes = self.args.src_classes
         self.test_loader = data_helper.get_PDA_test_dataloader(self.args)
 
         for _, ((data, class_l), d_idx) in enumerate(self.test_loader):
             data, class_l = data.to(self.device), class_l.to(self.device)
             with torch.no_grad():
                 outputs = self.model(data)
-            pred = torch.argmax(torch.softmax(outputs, dim=1), dim=1)
+                prob = torch.softmax(outputs, dim=1)
+                pred = torch.argmax(prob, dim=1)
+                ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.src_classes)
+                ent = ent.detach().cpu().numpy()
+
+                from sklearn.cluster import KMeans
+                kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+                labels = kmeans.predict(ent.reshape(-1,1))
+                idx = np.where(labels==1)[0]
+                iidx = 0
+                if ent[idx].mean() > ent.mean():
+                    iidx = 1
+                pred[np.where(labels==iidx)[0]] = self.args.n_classes
             correct_predictions += (pred == class_l).sum().item()
             total_samples += class_l.size(0)
 

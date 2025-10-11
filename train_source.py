@@ -60,14 +60,21 @@ class Trainer:
         self.device = device
         self.clip_feature_dim = 512
 
+        self.oda = False
+        if args.src_classes is not None and args.src_classes < args.n_classes:
+            self.oda = True
+
         self.featurizer = get_backbone(args.backbone, self.clip_feature_dim).to(device)
-        self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
+        if self.oda:
+            self.classifier = Classifier(self.clip_feature_dim, args.src_classes).to(device)
+        else:
+            self.classifier = Classifier(self.clip_feature_dim, args.n_classes).to(device)
         self.model = nn.Sequential(
             self.featurizer,
             self.classifier
         )
 
-        if args.src_classes is not None and args.src_classes < args.n_classes:
+        if self.oda:
             self.source_loader, self.val_loader = data_helper.get_ODA_train_dataloader(args)
             logging.info("Using ODA-Setting train dataloader")
         else:
