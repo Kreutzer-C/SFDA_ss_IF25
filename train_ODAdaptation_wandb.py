@@ -473,31 +473,48 @@ class Trainer:
 
         self.model.load_state_dict(torch.load(join(self.args.output_folder, f'best_targetmodel.pth')))
         self.model.eval()
-        correct_predictions = 0
-        total_samples = 0
         self.args.tgt_classes = self.args.src_classes
         self.test_loader = data_helper.get_PDA_test_dataloader(self.args)
 
+        # 收集所有batch的预测结果
+        all_probs = []
+        all_preds = []
+        all_labels = []
+        
         for _, ((data, class_l), d_idx) in enumerate(self.test_loader):
             data, class_l = data.to(self.device), class_l.to(self.device)
             with torch.no_grad():
                 outputs = self.model(data)
                 prob = torch.softmax(outputs, dim=1)
                 pred = torch.argmax(prob, dim=1)
-                ent = torch.sum(-prob * torch.log(prob + 1e-5), dim=1) / np.log(self.args.src_classes)
-                ent = ent.detach().cpu().numpy()
+                
+                # 收集当前batch的结果
+                all_probs.append(prob.detach().cpu())
+                all_preds.append(pred.detach().cpu())
+                all_labels.append(class_l.detach().cpu())
 
-                from sklearn.cluster import KMeans
-                kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
-                labels = kmeans.predict(ent.reshape(-1,1))
-                idx = np.where(labels==1)[0]
-                iidx = 0
-                if ent[idx].mean() > ent.mean():
-                    iidx = 1
-                pred[np.where(labels==iidx)[0]] = self.args.n_classes
-            correct_predictions += (pred == class_l).sum().item()
-            total_samples += class_l.size(0)
-
+        # 合并所有batch的结果
+        all_probs = torch.cat(all_probs, dim=0)  # [total_samples, n_classes]
+        all_preds = torch.cat(all_preds, dim=0)  # [total_samples]
+        all_labels = torch.cat(all_labels, dim=0)  # [total_samples]
+        
+        ent = torch.sum(-all_probs * torch.log(all_probs + 1e-5), dim=1) / np.log(self.args.src_classes)
+        ent = ent.detach().cpu().numpy()
+        
+        from sklearn.cluster import KMeans
+        kmeans = KMeans(2, random_state=0, n_init='auto').fit(ent.reshape(-1,1))
+        labels = kmeans.predict(ent.reshape(-1,1))
+        idx = np.where(labels==1)[0]
+        iidx = 0
+        if ent[idx].mean() > ent.mean():
+            iidx = 1
+        
+        all_preds_np = all_preds.numpy()
+        all_preds_np[np.where(labels==iidx)[0]] = self.args.n_classes
+        all_preds = torch.from_numpy(all_preds_np)
+        
+        correct_predictions = (all_preds == all_labels).sum().item()
+        total_samples = all_labels.size(0)
         test_accuracy = correct_predictions / total_samples
 
         logging.info(f'Accuracy: {self.best_epoch_acc:.4f} (with best vlm_acc={self.best_vlm_acc:.4f})')
