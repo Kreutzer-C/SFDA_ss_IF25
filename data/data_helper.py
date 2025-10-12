@@ -150,6 +150,17 @@ def get_ODA_test_dataloader(args):
     loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     return loader
 
+def get_GSFDA_test_dataloader(args):
+    if args.dataset == 'PACS':
+        names, labels = _dataset_info(join(dirname(__file__), 'data_path_txt_lists', args.dataset, '%s_test_kfold.txt' % args.source))
+    else:
+        names, labels = _dataset_info(join(dirname(__file__), 'data_path_txt_lists', args.dataset, '%s_test.txt' % args.source))
+    img_tr = get_val_transformer(args)
+    val_dataset = JigsawTestIADataset(names, labels, args.data_path, img_transformer=img_tr)
+
+    dataset = ConcatDataset([val_dataset])
+    loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    return loader
 
 def get_train_transformers(args):
     img_tr = [transforms.RandomResizedCrop((int(args.image_size), int(args.image_size)), (args.min_scale, args.max_scale))]

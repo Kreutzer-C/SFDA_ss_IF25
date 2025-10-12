@@ -29,7 +29,7 @@ def get_backbone(name, proj_dim, pretrained=True):
     elif name == "resnet18":
         network = models.resnet18(weights = "ResNet18_Weights.DEFAULT" if pretrained else None)
         encoder = nn.Sequential(*list(network.children())[:-1])
-        projector = nn.Linear(2048, proj_dim)
+        projector = nn.Linear(512, proj_dim)
         network = nn.Sequential(
             encoder,
             nn.Flatten(),
