@@ -118,6 +118,7 @@ def GSFDA_test():
             if os.path.exists(args.output_folder):
                 raise ValueError(f"Output path {args.output_folder} existed, please specify new one by setting <--exp>")
             else:
+                maybe_mkdir_p(args.output_folder)
                 print(">>> Output results will be saved at: {}".format(args.output_folder))
 
             for handler in logging.root.handlers[:]:
