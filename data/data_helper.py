@@ -64,7 +64,8 @@ def get_adapt_dataloader(args):
     else:
         names, labels = _dataset_info(join(dirname(__file__), 'data_path_txt_lists', args.dataset, '%s_test.txt' % args.target))
     # names, labels = _dataset_info(join(dirname(__file__), 'data_path_txt_lists', '%s_test.txt' % args.target))
-    img_tr = get_val_transformer(args)
+    # img_tr = get_val_transformer(args)
+    img_tr = get_train_transformers(args) if args.aug else get_val_transformer(args)
     val_dataset = JigsawTestIADataset(names, labels, args.data_path, img_transformer=img_tr)
 
     dataset = ConcatDataset([val_dataset])

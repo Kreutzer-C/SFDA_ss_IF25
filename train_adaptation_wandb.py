@@ -66,6 +66,7 @@ def get_args():
 
     # Data Augmentation Setting
     parser.add_argument("--image_size", type=int, default=224, help="Image size")
+    parser.add_argument("--aug", action='store_true', help="Whether to use data augmentation")
     parser.add_argument("--min_scale", default=0.8, type=float, help="Minimum scale percent")
     parser.add_argument("--max_scale", default=1.0, type=float, help="Maximum scale percent")
     parser.add_argument("--random_horiz_flip", default=0.5, type=float, help="Chance of random horizontal flip")
@@ -81,7 +82,7 @@ def get_args():
                         help='trade-off parameter of L_cls in L_MG')
     parser.add_argument("--alpha_decay", "-ad", default=0.5, type=float,
                         help='trade-off parameter of prototype bank updating')
-    parser.add_argument("--dynamic_ad", action='store_true', 
+    parser.add_argument("--dynamic_ad", default=True, type=bool,
                         help="Whether to use dynamic alpha decay")
     parser.add_argument("--K", default=3, type=int,
                         help='random choice times for constructing entangled prompts')
