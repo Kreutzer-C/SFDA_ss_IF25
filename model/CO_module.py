@@ -53,14 +53,20 @@ class Collaboration_Module(nn.Module):
         p_mix = (eu_tar * p_tar + eu_vlm * p_vlm) / (eu_tar + eu_vlm)
         return p_mix
 
-    def forward(self, p_tar, p_vlm, alpha):
-        if alpha > 0:
+    def forward(self, p_tar, p_vlm, alpha, mode='full'):
+        if mode == 'full':
             p_tar_new = self.class_prototype_atten(p_tar)
             self.update_membank(p_tar, p_vlm, alpha)
             p_mix = self.uncertainty_mixing(p_tar_new, p_vlm)
 
-        else:
+        elif mode == 'ent':
             p_mix = self.uncertainty_mixing(p_tar, p_vlm)
+        
+        elif mode == 'avg':
+            p_mix = (p_tar + p_vlm) / 2
+        
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
 
         return p_mix
 

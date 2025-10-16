@@ -88,7 +88,9 @@ def get_args():
                         help='random choice times for constructing entangled prompts')
     parser.add_argument("--temperature", "-tau", default=0.07, type=float,
                         help='temperature in InfoNCE loss')
-
+    parser.add_argument("--mode", default='full', type=str,
+                        choices=['full', 'ent', 'avg'],
+                        help='mode of collaboration module')
     return parser.parse_args()
 
 
@@ -246,7 +248,7 @@ class Trainer:
                 p_tar = torch.softmax(self.classifier(z), dim=1)
                 out_vlm = get_clip_outputs(self.clip_model, img, self.classify_prompt)
                 p_vlm = torch.softmax(out_vlm, dim=1)
-                p_mix = self.collaboration_module(p_tar, p_vlm, self.ad)
+                p_mix = self.collaboration_module(p_tar, p_vlm, self.ad, self.args.mode)
 
             y_pred_mix = torch.argmax(p_mix, dim=1)
             anchor_prompt = []
@@ -325,7 +327,7 @@ class Trainer:
                 out_vlm = get_clip_outputs(self.clip_model, img, self.classify_prompt)
                 p_vlm = torch.softmax(out_vlm, dim=1)
 
-                p_mix = self.collaboration_module(p_tar, p_vlm, self.ad)
+                p_mix = self.collaboration_module(p_tar, p_vlm, self.ad, self.args.mode)
                 y_pred_mix = torch.argmax(p_mix, dim=1)
 
                 anchor_prompt = [f"a {self.args.classes[i].replace('_', ' ')}." for i in y_pred_mix]
