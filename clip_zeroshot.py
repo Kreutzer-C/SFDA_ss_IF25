@@ -67,6 +67,12 @@ class Trainer:
         self.clip_model.eval()
         correct_predictions = 0
         total_samples = 0
+        
+        # 为VisDA数据集添加每个类别的准确率统计
+        if self.args.dataset == "VisDA":
+            class_correct = [0] * self.args.n_classes
+            class_total = [0] * self.args.n_classes
+        
         for iter, ((data, class_l), d_idx) in enumerate(tqdm(self.test_loader)):
             data, class_l = data.to(self.device), class_l.to(self.device)
 
@@ -88,11 +94,30 @@ class Trainer:
 
             correct_predictions += (preds == class_l).sum().item()
             total_samples += class_l.size(0)
+            
+            # 为VisDA数据集统计每个类别的准确率
+            if self.args.dataset == "VisDA":
+                for i in range(class_l.size(0)):
+                    label = class_l[i].item()
+                    class_total[label] += 1
+                    if preds[i] == class_l[i]:
+                        class_correct[label] += 1
 
         accuracy = correct_predictions / total_samples
 
         logging.info("\n>>>=====================<<<")
         logging.info(f'Domain: {self.args.target} Accuracy: {accuracy:.4f}')
+        
+        # 为VisDA数据集输出每个类别的准确率
+        if self.args.dataset == "VisDA":
+            logging.info("Per-class accuracy:")
+            for i in range(self.args.n_classes):
+                if class_total[i] > 0:
+                    class_acc = class_correct[i] / class_total[i]
+                    logging.info(f'  {self.args.classes[i]}: {class_acc:.4f} ({class_correct[i]}/{class_total[i]})')
+                else:
+                    logging.info(f'  {self.args.classes[i]}: N/A (0 samples)')
+        
         logging.info(">>>=====================<<<\n")
 
 
