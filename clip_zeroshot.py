@@ -137,6 +137,8 @@ def clip_inference():
     
     for domain in args.Domain_ID:
         args.target = domain
+        if args.dataset == "VisDA" and args.target == "synthetic":
+            continue
 
         args.output_folder = join(os.getcwd(), 'results', args.exp, args.CLIP_backbone.replace('/', '-'),
                                   args.dataset, args.target)
