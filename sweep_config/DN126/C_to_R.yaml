@@ -41,17 +41,17 @@ parameters:
   batch_size:
     value: 64
   epochs:
-    value: 20
+    value: 15
   learning_rate_tar:
-    values: [!!float 1e-5, !!float 5e-5, !!float 7e-5, !!float 1e-4, !!float 2e-4, !!float 5e-4]
+    values: [!!float 5e-6, !!float 1e-5, !!float 5e-5, !!float 7e-5, !!float 1e-4]
   learning_rate_lora:
-    values: [!!float 1e-6, !!float 2e-6, !!float 5e-6, !!float 1e-5, !!float 2e-5, !!float 5e-5]
+    values: [!!float 1e-6, !!float 2e-6, !!float 5e-6, !!float 1e-5, !!float 2e-5]
   src_init:
     values: [False, True]
   warmup_ratio:
     value: 0.1
   aug:
-    values: [False, True]
+    value: False
 
   lamb1:
     values: [0.1, 0.5, 1.0, 2.0, 5.0]
@@ -66,5 +66,5 @@ parameters:
   temperature:
     values: [0.01, 0.04, 0.07, 0.1, 0.15]
   dynamic_ad:
-    value: true
+    value: True
 max_runs: 72
