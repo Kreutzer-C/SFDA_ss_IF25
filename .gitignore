@@ -4,3 +4,4 @@ results/
 wandb/
 pretrain/
 __pycache__/
+git_setup.sh
