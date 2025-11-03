@@ -34,7 +34,7 @@ parameters:
   target:
     value: "real"
   acc_lower_bound:
-    value: 0.70
+    value: 0.60
   
   data_path:
     value: "./dataset"
