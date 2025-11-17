@@ -30,7 +30,7 @@ parameters:
   dataset:
     value: "DomainNet-126"
   source:
-    value: "clipart"
+    value: "painting"
   target:
     value: "sketch"
   acc_lower_bound:
