@@ -50,6 +50,8 @@ parameters:
     value: True
   warmup_ratio:
     value: 0.1
+  aug:
+    value: False
 
   lamb1:
     values: [0.1, 0.2, 0.5, 1.0, 2.0, 5.0]
