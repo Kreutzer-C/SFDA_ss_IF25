@@ -39,7 +39,6 @@ def get_args():
     parser.add_argument("--batch_size", "-b", type=int, default=64, help="Batch size")
     parser.add_argument("--epochs", "-e", type=int, default=20, help="Number of epochs")
     parser.add_argument("--learning_rate", "-lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--weight_decay", default=1e-4, type=float, help="Weight decay")
 
     # Data Augmentation Setting
     parser.add_argument("--image_size", type=int, default=224, help="Image size")
@@ -75,8 +74,7 @@ class Trainer:
         logging.info(f">>> Loading source model from: {args.checkpoint_path}")
 
         # 定义优化器和损失函数
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=args.learning_rate, 
-                                   weight_decay=args.weight_decay)
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=args.learning_rate)
         self.criterion = nn.CrossEntropyLoss()
         
         # 学习率调度器
