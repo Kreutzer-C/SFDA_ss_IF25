@@ -219,7 +219,7 @@ class Color_Generator:
 
 
 if __name__ == "__main__":
-    feature_path = "/opt/data/private/SFDA_ss_IF25/results/Feat_Visualization-Ours/resnet50/Officehome/Clipart_to_Art"
+    feature_path = "/opt/data/private/SFDA_ss_IF25/results/Feat_Visualization-Source/resnet50/Officehome/Clipart_to_Art"
 
     feature = np.load(join(feature_path, "features.npy"))
     pred = np.load(join(feature_path, "labels.npy"))
