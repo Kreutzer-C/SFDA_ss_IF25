@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import numpy as np
 from PIL import Image
@@ -11,32 +11,37 @@ from matplotlib import cm
 
 from model.model_factory import get_backbone, Classifier
 
-class_map = ["aircraft_carrier", "alarm_clock", "ant", "anvil", "asparagus", "axe",
-                        "banana", "basket", "bathtub", "bear", "bee", "bird", "blackberry",
-                        "blueberry", "bottlecap", "broccoli", "bus", "butterfly", "cactus",
-                        "cake", "calculator", "camel", "camera", "candle", "cannon", "canoe",
-                        "carrot", "castle", "cat", "ceiling_fan", "cello", "cell_phone", "chair",
-                        "chandelier", "coffee_cup", "compass", "computer", "cow", "crab",
-                        "crocodile", "cruise_ship", "dog", "dolphin", "dragon", "drums", "duck",
-                        "dumbbell", "elephant", "eyeglasses", "feather", "fence", "fish",
-                        "flamingo", "flower", "foot", "fork", "frog", "giraffe", "goatee",
-                        "grapes", "guitar", "hammer", "helicopter", "helmet", "horse", "kangaroo",
-                        "lantern", "laptop", "leaf", "lion", "lipstick", "lobster", "microphone",
-                        "monkey", "mosquito", "mouse", "mug", "mushroom", "onion", "panda",
-                        "peanut", "pear", "peas", "pencil", "penguin", "pig", "pillow",
-                        "pineapple", "potato", "power_outlet", "purse", "rabbit", "raccoon",
-                        "rhinoceros", "rifle", "saxophone", "screwdriver", "sea_turtle", "see_saw",
-                        "sheep", "shoe", "skateboard", "snake", "speedboat", "spider", "squirrel",
-                        "strawberry", "streetlight", "string_bean", "submarine", "swan", "table",
-                        "teapot", "teddy-bear", "television", "The_Eiffel_Tower",
-                        "The_Great_Wall_of_China", "tiger", "toe", "train", "truck", "umbrella",
-                        "vase", "watermelon", "whale", "zebra"]
+# DN126
+# class_map = ["aircraft_carrier", "alarm_clock", "ant", "anvil", "asparagus", "axe",
+#                         "banana", "basket", "bathtub", "bear", "bee", "bird", "blackberry",
+#                         "blueberry", "bottlecap", "broccoli", "bus", "butterfly", "cactus",
+#                         "cake", "calculator", "camel", "camera", "candle", "cannon", "canoe",
+#                         "carrot", "castle", "cat", "ceiling_fan", "cello", "cell_phone", "chair",
+#                         "chandelier", "coffee_cup", "compass", "computer", "cow", "crab",
+#                         "crocodile", "cruise_ship", "dog", "dolphin", "dragon", "drums", "duck",
+#                         "dumbbell", "elephant", "eyeglasses", "feather", "fence", "fish",
+#                         "flamingo", "flower", "foot", "fork", "frog", "giraffe", "goatee",
+#                         "grapes", "guitar", "hammer", "helicopter", "helmet", "horse", "kangaroo",
+#                         "lantern", "laptop", "leaf", "lion", "lipstick", "lobster", "microphone",
+#                         "monkey", "mosquito", "mouse", "mug", "mushroom", "onion", "panda",
+#                         "peanut", "pear", "peas", "pencil", "penguin", "pig", "pillow",
+#                         "pineapple", "potato", "power_outlet", "purse", "rabbit", "raccoon",
+#                         "rhinoceros", "rifle", "saxophone", "screwdriver", "sea_turtle", "see_saw",
+#                         "sheep", "shoe", "skateboard", "snake", "speedboat", "spider", "squirrel",
+#                         "strawberry", "streetlight", "string_bean", "submarine", "swan", "table",
+#                         "teapot", "teddy-bear", "television", "The_Eiffel_Tower",
+#                         "The_Great_Wall_of_China", "tiger", "toe", "train", "truck", "umbrella",
+#                         "vase", "watermelon", "whale", "zebra"]
+
+# VisDA
+class_map = ["aeroplane", "bicycle", "bus", "car", "horse", "knife", "motorcycle", "person", "plant",
+                        "skateboard", "train", "truck"]
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="ResNet Grad-CAM 可视化脚本")
     parser.add_argument("--ckpt", required=True, help="ResNet 训练权重路径 (.pth/.pt)")
-    parser.add_argument("--image", required=True, help="待可视化的原始图像路径")
+    parser.add_argument("--image", required=True, help="待可视化的原始图像路径（可以是单个图像文件或包含图像的目录）")
     parser.add_argument("--output_dir", default="./results/CAM_Vis", help="CAM 叠加热力图输出文件夹")
     parser.add_argument("--backbone", default="resnet50",
                         choices=["resnet18", "resnet50", "resnet101"],
@@ -153,11 +158,65 @@ def overlay_heatmap(original_image: Image.Image, heatmap: np.ndarray, alpha: flo
     return Image.fromarray(np.uint8(overlay * 255))
 
 
+def get_image_files(image_path: str) -> List[str]:
+    """获取图像文件列表。如果输入是目录，则返回目录中所有图像文件；如果是文件，则返回包含该文件的列表。"""
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"路径不存在: {image_path}")
+    
+    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.tif', '.webp'}
+    
+    if os.path.isfile(image_path):
+        # 检查文件扩展名
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext not in image_extensions:
+            raise ValueError(f"不支持的文件格式: {ext}。支持的格式: {image_extensions}")
+        return [image_path]
+    elif os.path.isdir(image_path):
+        # 遍历目录中的所有图像文件
+        image_files = []
+        for root, dirs, files in os.walk(image_path):
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in image_extensions:
+                    image_files.append(os.path.join(root, file))
+        if not image_files:
+            raise ValueError(f"目录中未找到图像文件: {image_path}")
+        return sorted(image_files)
+    else:
+        raise ValueError(f"路径既不是文件也不是目录: {image_path}")
+
+
+def process_single_image(model: nn.Module,
+                        target_layer: nn.Module,
+                        image_path: str,
+                        output_dir: str,
+                        image_size: int,
+                        target_class: Optional[int],
+                        alpha: float,
+                        device: torch.device) -> None:
+    """处理单个图像的可视化。"""
+    try:
+        input_tensor, original_image = prepare_image(image_path, image_size)
+        heatmap, used_class = compute_grad_cam(model, target_layer, input_tensor, target_class, device)
+        overlay = overlay_heatmap(original_image, heatmap, alpha)
+        
+        output_path = os.path.join(output_dir, os.path.basename(image_path))
+        overlay.save(output_path)
+        print(f"Saved CAM heatmap for class [{class_map[used_class]}] to {output_path}")
+    except Exception as e:
+        print(f"[错误] 处理图像 {image_path} 时出错: {e}")
+
+
 def main():
     args = parse_args()
     device_str = args.device if args.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device(device_str)
 
+    # 获取所有需要处理的图像文件
+    image_files = get_image_files(args.image)
+    print(f"找到 {len(image_files)} 个图像文件")
+
+    # 加载模型
     state_dict = load_checkpoint_state(args.ckpt, device)
     num_classes = args.num_classes or infer_num_classes(state_dict, args.proj_dim)
 
@@ -172,15 +231,24 @@ def main():
 
     target_layer = get_target_layer(model)
 
-    input_tensor, original_image = prepare_image(args.image, args.image_size)
-    heatmap, used_class = compute_grad_cam(model, target_layer, input_tensor, args.target_class, device)
-
-    overlay = overlay_heatmap(original_image, heatmap, args.alpha)
-
+    # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(args.output_dir, os.path.basename(args.image))
-    overlay.save(output_path)
-    print(f"Saved CAM heatmap for class [{class_map[used_class]}] to {output_path}")
+
+    # 处理每个图像文件
+    for idx, image_path in enumerate(image_files, 1):
+        print(f"\n[{idx}/{len(image_files)}] 处理: {image_path}")
+        process_single_image(
+            model=model,
+            target_layer=target_layer,
+            image_path=image_path,
+            output_dir=args.output_dir,
+            image_size=args.image_size,
+            target_class=args.target_class,
+            alpha=args.alpha,
+            device=device
+        )
+    
+    print(f"\n完成！共处理 {len(image_files)} 个图像文件，结果保存在: {args.output_dir}")
 
 
 if __name__ == "__main__":
